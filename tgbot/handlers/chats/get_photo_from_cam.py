@@ -1,9 +1,14 @@
 import os
+import shutil
+from io import BytesIO
 
 import cv2
+import requests
+from PIL import Image
 from aiogram import Router, Bot
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, FSInputFile
+from requests.auth import HTTPDigestAuth
 
 from tgbot import config
 from tgbot.keyboards import GetBuildingCallBack, get_cameras_for_building_keyboard, GetBuildingCamerasCallback
@@ -49,11 +54,14 @@ async def get_camera_for_photo_from_cam(call: CallbackQuery,
         text='Следующим сообщением Вы получите фото с камеры',
         reply_markup=None
     )
-    camera_url = f'rtsp://{camera.login}:{camera.password}@{camera.ip_address}:554/cam/realmonitor?channel=1&subtype=0'
-    cap = cv2.VideoCapture(camera_url)
-    ret, frame = cap.read()
-    cv2.imwrite('image.jpg', frame)
-    cap.release()
+    camera_url = f'http://{camera.ip_address}/cgi-bin/snapshot.cgi?channel=1'
+    auth = HTTPDigestAuth(username=camera.login, password=camera.password)
+    response = requests.get(camera_url, auth=auth)
+    print(response)
+    if response.status_code == 200:
+        response.raise_for_status()
+        image = Image.open(BytesIO(response.content))
+        image.save("image.jpg")
     await bot.send_photo(
         chat_id=call.message.chat.id,
         photo=FSInputFile('image.jpg')
